@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Note Identifier</title>
+    <style>
+        #start {
+            margin-top: 20px;
+        }
+        #error {
+            display: none;
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Note Identifier</h1>
+    <div>
+        Frequency: <strong id="frequency">--</strong>
+    </div>
+    <div>
+        Note: <strong id="note">--</strong>
+    </div>
+    <button id="start">start listening</button>
+    <div id="error">Permission Denied</div>
+    <script>
+        const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+        // Convert frequency to musical note number
+        function frequencyToNoteNumber(frequency) {
+            return Math.round(69 + 12 * Math.log2(frequency / 440));
+        }
+
+        // Map note number to note name
+        function noteNumberToName(noteNumber) {
+            const octave = Math.floor(noteNumber / 12) - 1;
+            const note = notes[noteNumber % 12];
+            return note + octave;
+        }
+
+        // Get the dominant frequency from the frequency data
+        function getDominantFrequency(dataArray, sampleRate) {
+            let maxIndex = 0;
+            let maxValue = -Infinity;
+
+            for (let i = 0; i < dataArray.length; i++) {
+                if (dataArray[i] > maxValue) {
+                    maxValue = dataArray[i];
+                    maxIndex = i;
+                }
+            }
+
+            if (maxValue < 50) {
+                // If not, return null (no valid pitch detected)
+                return null;
+            }
+
+            // Convert index to frequency
+            const nyquist = sampleRate / 2;
+            const frequency = (maxIndex * nyquist) / dataArray.length;
+            return frequency;
+        }
+
+        document.getElementById('start').addEventListener('click', () => {
+
+            navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 4096;
+                const sampleRate = audioCtx.sampleRate;
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                const source = audioCtx.createMediaStreamSource(stream);
+                source.connect(analyser);
+
+                function detectNote() {
+                    analyser.getByteFrequencyData(dataArray);
+
+                    // Get dominant frequency
+                    const dominantFrequency = getDominantFrequency(dataArray, sampleRate);
+
+                    // Convert to note number and name
+                    const noteNumber = frequencyToNoteNumber(dominantFrequency);
+                    const noteName = noteNumberToName(noteNumber);
+
+                    if (dominantFrequency !== null) {
+                        document.getElementById('frequency').textContent = dominantFrequency + ' Hz';
+                        document.getElementById('note').textContent = noteName;
+                    } else {
+                        document.getElementById('frequency').textContent = '--';
+                        document.getElementById('note').textContent = '--';
+                    }
+
+                    requestAnimationFrame(detectNote);
+                }
+
+                detectNote();
+            }).catch(err => {
+               document.getElementById('error').style.display = 'block'; 
+            });
+        });
+
+    </script>
+</body>
+
+</html>
